@@ -1,14 +1,16 @@
+import pandas as pd
 import torch
 import torch.nn as nn
 import os
+import numpy as np
 import sys
 import math
 from util.tensorlization import tensor_from_csv
 import torch.optim as optim
-
+import argparse
 from util.Encoder import TransformerEncoderLayer
 from util.PositionalEncoding import PositionalEncoding
-
+import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 
 
@@ -38,7 +40,9 @@ class TransformerModel(nn.Module):
     def forward(self, x):
         # x: (batch, seq_len, input_dim)
         batch_size, seq_len, input_dim = x.size()
-        x = x.view(batch_size * seq_len, input_dim)
+        # x = x.view(batch_size * seq_len, input_dim)
+        x = x.reshape(batch_size * seq_len, input_dim)
+
         x = self.embedding_layer(x)
         x = x.view(batch_size, seq_len, -1)
 
@@ -51,21 +55,44 @@ class TransformerModel(nn.Module):
 
 
 if __name__ == "__main__":
-    # 데이터 로딩
-    # input_tensor = tensor_from_csv("data20000.csv", seq_len=10)
-    target_columns = ["expected_growth", "expected_ph_duration", "target_ph"]
+    # 입력부분
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-p","--data_path", type= str ,default ="data20000.csv")
+    args = parser.parse_args()
+    print("학습 데이터 경로",args.data_path)
+    data_path = args.data_path
+    df = pd.read_csv(data_path)
+    print("데이터 통계는 다음과 같습니다 :" ,df.describe())
+    print("학습할 데이터의 항목은 다음과 같습니다.:",list(df.columns[1:]))
+    target_category = int(input("예측 할 항목은 몇개 입니까?"))
+    # TODO : api 화를 위한 forecatst config 작성
+
+    target_columns = df.columns[1:target_category+1]
+
     input_tensor, target = tensor_from_csv("data20000.csv", seq_len=10, target_cols=target_columns)
     output_dim = len(target_columns)
 
+
     input_dim = input_tensor.shape[2]
-    output_dim = 3
+    output_dim = target_category
     seq_len = 10
 
-    # 라벨 임의 생성 (예: expected_growth를 라벨로 뽑는 게 정확하나, 지금은 더미용)
-    target = torch.randn(input_tensor.shape[0], output_dim)  # 더미 라벨
 
     # 훈련/검증 분할
     X_train, X_val, y_train, y_val = train_test_split(input_tensor, target, test_size=0.2, random_state=42)
+
+    # numpy로 변환
+    X_val_np = X_val.numpy().reshape(X_val.shape[0], -1)  # (batch, seq_len * input_dim)
+    y_val_np = y_val.numpy()
+
+    # 저장
+    df_xval = pd.DataFrame(X_val_np)
+    df_yval = pd.DataFrame(y_val_np, columns=[f"target_{i}" for i in range(y_val_np.shape[1])])
+
+    df_xval.to_csv("x_val.csv", index=False)
+    df_yval.to_csv("y_val.csv", index=False)
+    print(" 검증용 데이터 저장 완료: x_val.csv, y_val.csv")
 
     # 모델 정의
     model = TransformerModel(input_dim=input_dim, output_dim=output_dim, seq_len=seq_len)
@@ -73,7 +100,7 @@ if __name__ == "__main__":
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     # 훈련 루프
-    n_epochs = 5
+    n_epochs = int(input("얼마나 학습할건가요?"))
     for epoch in range(n_epochs):
         model.train()
         optimizer.zero_grad()
@@ -92,3 +119,4 @@ if __name__ == "__main__":
     # 모델 저장
     torch.save(model.state_dict(), "model.pth")
     print(" 모델 저장 완료: model.pth")
+    print("예측 항목갯수는 :",target_category,"이고 test할때 기입하십쇼")
