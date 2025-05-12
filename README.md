@@ -2,7 +2,7 @@
 이 폴더는 Transformer 모델의 구성요소들을 분리해놓은 곳입니다.
 쉽게 말하면, 큰 Transformer 모델을 만들기 위해 필요한 부품들이 들어있습니다.
 각 파일은 하나의 역할을 담당하고 있고, 서로 조립되어서 최종 모델이 만들어집니다.
-
+https://newsight.tistory.com/330
 🔧 Encoder.py
 Transformer의 인코더 레이어 하나를 정의한 파일입니다.
 
