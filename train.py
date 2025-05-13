@@ -14,8 +14,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Transformer 시계열 예측 학습")
     parser.add_argument("-i", "--data_path", type = str, default = "data20000.csv", help = "학습 데이터 CSV 경로")
     parser.add_argument("-s","--seq_len", type = int, default = 10 , help = "시퀀스 길이") # 데이터증가 할경우 증가
-    parser.add_argument("-o","--model", type = str, default = "model.pth", help ="모델 저장 경로")
-    parser.add_argument("-e","--epoch", type = int, default = 5000, help ="epoch 수")
+    parser.add_argument("-o","--model", type = str, default = "model1.pth", help ="모델 저장 경로")
+    parser.add_argument("-e","--epoch", type = int, default = 10, help ="epoch 수")
     args = parser.parse_args()
 
     # ---------- 데이터 로드 및 정보 ----------
@@ -76,7 +76,7 @@ if __name__ == "__main__":
             raise ValueError("[ERROR] 올바른 번호를 선택하세요 (1/2/3/4)")
 
         print(f"\n[INFO] 선택 가능한 컬럼: {category_map[selected_category]}")
-        print("[입력] 예측할 컬럼명을 ','로 구분하여 입력하세요:")
+        print("[입력] 예측할 컬럼명을 ','로 구분하여 입력하세요(예: temp_air,temp_water):")
         target_input = input(">> ").strip()
         target_columns = [col.strip() for col in target_input.split(",")]
 
@@ -89,6 +89,7 @@ if __name__ == "__main__":
     # ---------- 텐서 생성 ----------
     input_tensor, target = tensor_from_csv(args.data_path, seq_len=10, target_cols=target_columns)
     input_dim = input_tensor.shape[2]
+    print("target_columns",target_columns)
     output_dim = len(target_columns)
     seq_len = args.seq_len
 
@@ -105,7 +106,19 @@ if __name__ == "__main__":
 
     # ---------- 모델 생성 ----------
     model = TransformerModel(input_dim=input_dim, output_dim=output_dim, seq_len=seq_len)
-    criterion = nn.MSELoss()
+    # ---------- 예측하려는 것이 무엇인지 검색 ----------
+    if all(col.startswith("device_") for col in target_columns):
+        task_type = "device"
+    elif all(col.startswith("expected_") or col.startswith("target_") for col in target_columns):
+        task_type = "expected"
+    else:
+        task_type = "sensor"
+
+    if task_type == "device":
+        criterion = nn.BCEWithLogitsLoss()
+    else:
+        criterion = nn.MSELoss()
+
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     # ---------- 이어서 학습 여부 확인 ----------
@@ -130,25 +143,17 @@ if __name__ == "__main__":
         seq_len = meta_info["seq_len"]
 
         print(f"[INFO] 이어서 학습 타겟 컬럼: {target_columns}")
+        model = TransformerModel(input_dim=input_dim, output_dim=output_dim, seq_len=seq_len)
+
     else:
-        # 처음부터 타겟 설정
-        # (위에서 개선한 센서/디바이스 자동 구분 선택 코드와 결합 가능)
-        target_category = int(input("\n[입력] 예측할 항목 수를 입력하세요: "))
-        target_columns = df.columns[1:target_category + 1]
-
-        input_tensor, target = tensor_from_csv(args.data_path, seq_len=args.seq_len, target_cols=target_columns)
-        input_dim = input_tensor.shape[2]
-        output_dim = len(target_columns)
-        seq_len = args.seq_len
-
+        print("처음 학습을 합니다.")
     # ---------- 모델 준비 ----------
-    model = TransformerModel(input_dim=input_dim, output_dim=output_dim, seq_len=seq_len)
 
     if resume_training:
         model.load_state_dict(torch.load(args.model))
         print(f"[INFO] 모델 파라미터 불러오기 완료: {args.model}")
 
-    criterion = nn.MSELoss()
+
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     # ---------- 학습 ----------
@@ -182,6 +187,7 @@ if __name__ == "__main__":
         "output_dim": output_dim,
         "seq_len": seq_len
     }
+    # 설정값 넘겨주므로 하드 코딩
     with open("model_meta.json", "w") as f:
         json.dump(meta_info, f, indent=4)
 

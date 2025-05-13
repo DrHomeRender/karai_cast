@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import json
 import argparse
 
-def device_rule(target_temp_air=24,target_temp_water=10,target_humidity=80):
+def device_rule(target_temp_air=27,target_temp_water=57,target_humidity=21):
     pred_temp_air = df_pred["predicted_temp_air"]
     pred_temp_water = df_pred["predicted_temp_water"]
     pred_humidity = df_pred["predicted_humidity"]
@@ -43,12 +43,10 @@ if __name__ == '__main__':
     parser.add_argument("-m", "--model", type=str, default="model.pth", help="모델 저장 경로")
     args = parser.parse_args()
 
-    data_path = "data20000.csv"
-    model_path = "model.pth"
+    data_path = args.data_path
+    model_path = args.model
     df = pd.read_csv(data_path)
     print(df.columns)
-    target_category = int(input("예측 할 항목은 몇개 였나요?"))
-    TARGET_COLS = df.columns[1:target_category+1]
 
     # 전체 컬럼 보기 설정
     pd.set_option('display.max_columns', None)
@@ -152,8 +150,12 @@ if __name__ == '__main__':
 
         for i, col in enumerate(TARGET_COLS):
             plt.figure(figsize=(10, 3))
-            plt.plot(true_val[:, i], label="real", linewidth=2)
-            plt.plot(pred_val[:, i], label="pred", linestyle='--')
+            plt.plot(true_values[:, i], label="real (0/1)", linewidth=2)
+            plt.plot(pred_values[:, i], label="pred (float)", linestyle='--')
+
+            # Sigmoid 적용해서 예측을 이진화한 경우
+            pred_binary = (pred_values[:, i] > 0.5).astype(int)
+            plt.plot(pred_binary, label="pred (binary)", linestyle=':')
 
             # 오차 계산
             errors = abs(true_val[:, i] - pred_val[:, i])
