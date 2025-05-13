@@ -7,6 +7,7 @@ from sklearn.model_selection import train_test_split
 from util.tensorlization import tensor_from_csv
 from util.TransformerModel import TransformerModel
 import json
+import os
 # ----------------------- 메인 실행 -----------------------
 if __name__ == "__main__":
     # ---------- 입력 파라미터 ----------
@@ -23,25 +24,7 @@ if __name__ == "__main__":
     print("[INFO] 데이터 통계:\n", df.describe())
     print("[INFO] 학습 대상 컬럼:", list(df.columns[1:]))
 
-    # ---------- 예측 타겟 설정1 ---------- 인덱스 범위 입력
-    #
-    # target_category = int(input("\n[입력] 예측할 항목 수를 입력하세요: "))
-    # target_columns = df.columns[1:target_category+1]
-    # print(f"[INFO] 예측할 타겟 컬럼: {list(target_columns)}")
-
-    # # ---------- 예측 타겟 설정2 ---------- 특정 이름 입력
-    # print("\n[입력] 예측할 컬럼명을 ','로 구분해서 입력하세요 (예: temp_air,temp_water,humidity):")
-    # target_input = input(">> ").strip()
-    # target_columns = [col.strip() for col in target_input.split(",")]
-    #
-    # # 검증
-    # missing_cols = [col for col in target_columns if col not in df.columns]
-    # if missing_cols:
-    #     raise ValueError(f"[ERROR] 존재하지 않는 컬럼명 입력: {missing_cols}")
-    #
-    # print(f"[INFO] 예측할 타겟 컬럼: {target_columns}")
-
-    # ---------- 예측 타겟 설정3 ---------- 카테고리
+    # ---------- 예측 타겟 설정 ---------- 카테고리
     # ---------- 선택 방식 ----------
     print("\n[옵션] 예측 컬럼 선택 방식을 골라주세요:")
     print("1. 직접 컬럼명 입력")
@@ -122,6 +105,49 @@ if __name__ == "__main__":
 
     # ---------- 모델 생성 ----------
     model = TransformerModel(input_dim=input_dim, output_dim=output_dim, seq_len=seq_len)
+    criterion = nn.MSELoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+
+    # ---------- 이어서 학습 여부 확인 ----------
+    resume_training = False
+    if os.path.exists(args.model) and os.path.exists("model_meta.json"):
+        resume_input = input(f"\n[INFO] 이전 학습 모델과 메타 정보가 존재합니다. 이어서 학습하시겠습니까? (y/n) > ").strip().lower()
+        if resume_input == "y":
+            resume_training = True
+
+    # ---------- 데이터 로드 및 정보 ----------
+    df = pd.read_csv(args.data_path)
+
+    if resume_training:
+        # 메타 정보 로드
+        with open("model_meta.json", "r") as f:
+            meta_info = json.load(f)
+
+        target_columns = meta_info["target_columns"]
+        input_tensor, target = tensor_from_csv(args.data_path, seq_len=meta_info["seq_len"], target_cols=target_columns)
+        input_dim = meta_info["input_dim"]
+        output_dim = meta_info["output_dim"]
+        seq_len = meta_info["seq_len"]
+
+        print(f"[INFO] 이어서 학습 타겟 컬럼: {target_columns}")
+    else:
+        # 처음부터 타겟 설정
+        # (위에서 개선한 센서/디바이스 자동 구분 선택 코드와 결합 가능)
+        target_category = int(input("\n[입력] 예측할 항목 수를 입력하세요: "))
+        target_columns = df.columns[1:target_category + 1]
+
+        input_tensor, target = tensor_from_csv(args.data_path, seq_len=args.seq_len, target_cols=target_columns)
+        input_dim = input_tensor.shape[2]
+        output_dim = len(target_columns)
+        seq_len = args.seq_len
+
+    # ---------- 모델 준비 ----------
+    model = TransformerModel(input_dim=input_dim, output_dim=output_dim, seq_len=seq_len)
+
+    if resume_training:
+        model.load_state_dict(torch.load(args.model))
+        print(f"[INFO] 모델 파라미터 불러오기 완료: {args.model}")
+
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 

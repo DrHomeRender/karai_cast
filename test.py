@@ -4,6 +4,7 @@ from util.tensorlization import tensor_from_csv
 from train import TransformerModel
 import matplotlib.pyplot as plt
 import json
+import argparse
 
 def device_rule(target_temp_air=24,target_temp_water=10,target_humidity=80):
     pred_temp_air = df_pred["predicted_temp_air"]
@@ -33,17 +34,18 @@ if __name__ == '__main__':
 
     TARGET_COLS = meta_info["target_columns"]
     output_dim = meta_info["output_dim"]
-    SEQ_LEN = meta_info["seq_len"]
-
+    seq_len = meta_info["seq_len"]
     print(f"[INFO] 메타 정보 불러오기 완료. 타겟 컬럼: {TARGET_COLS}")
 
-
     # ------------------- 설정 -------------------
-    SEQ_LEN = 10
-    DATA_PATH = "data20000.csv"
+    parser = argparse.ArgumentParser(description="Transformer 시계열 예측 학습")
+    parser.add_argument("-i", "--data_path", type=str, default="data20000.csv", help="학습 데이터 CSV 경로")
+    parser.add_argument("-m", "--model", type=str, default="model.pth", help="모델 저장 경로")
+    args = parser.parse_args()
 
-    MODEL_PATH = "model.pth"
-    df = pd.read_csv(DATA_PATH)
+    data_path = "data20000.csv"
+    model_path = "model.pth"
+    df = pd.read_csv(data_path)
     print(df.columns)
     target_category = int(input("예측 할 항목은 몇개 였나요?"))
     TARGET_COLS = df.columns[1:target_category+1]
@@ -53,20 +55,18 @@ if __name__ == '__main__':
     pd.set_option('display.width', None)
 
     # ------------------- 원본 데이터 로딩 (시간 매핑용) -------------------
-    df_raw = pd.read_csv(DATA_PATH)
+    df_raw = pd.read_csv(data_path)
     if "time" not in df_raw.columns:
         raise ValueError(" 'time' 컬럼이 데이터에 없습니다.")
-    time_list = df_raw["time"].iloc[SEQ_LEN:].reset_index(drop=True)
+    time_list = df_raw["time"].iloc[seq_len:].reset_index(drop=True)
 
     # ------------------- 입력 텐서 생성 -------------------
-    input_tensor, _ = tensor_from_csv(DATA_PATH, seq_len=SEQ_LEN, target_cols=TARGET_COLS)
+    input_tensor, _ = tensor_from_csv(data_path, seq_len=seq_len, target_cols=TARGET_COLS)
     input_dim = input_tensor.shape[2]
 
-    output_dim = len(TARGET_COLS)
-
     # ------------------- 모델 불러오기 -------------------
-    model = TransformerModel(input_dim=input_dim, output_dim=output_dim, seq_len=SEQ_LEN)
-    model.load_state_dict(torch.load(MODEL_PATH))
+    model = TransformerModel(input_dim=input_dim, output_dim=output_dim, seq_len=seq_len)
+    model.load_state_dict(torch.load(model_path))
     model.eval()
 
     # ------------------- 예측 수행 -------------------
@@ -88,7 +88,7 @@ if __name__ == '__main__':
 
     # ------------------- 실제값 로딩 -------------------
     df_true = pd.read_csv("data20000.csv")
-    true_values = df_true[TARGET_COLS].iloc[SEQ_LEN:].reset_index(drop=True).values[:len(df_pred)]
+    true_values = df_true[TARGET_COLS].iloc[seq_len:].reset_index(drop=True).values[:len(df_pred)]
 
     # 예측값
     pred_values = predictions[:len(true_values)]
@@ -140,8 +140,8 @@ if __name__ == '__main__':
         y_val = pd.read_csv("y_val.csv").values
 
         # 자동 계산
-        input_dim_val = x_val.shape[1] // SEQ_LEN
-        x_val_tensor = torch.tensor(x_val, dtype=torch.float32).view(-1, SEQ_LEN, input_dim_val)
+        input_dim_val = x_val.shape[1] // seq_len
+        x_val_tensor = torch.tensor(x_val, dtype=torch.float32).view(-1, seq_len, input_dim_val)
         y_val_tensor = torch.tensor(y_val, dtype=torch.float32)
 
         with torch.no_grad():
@@ -171,7 +171,7 @@ if __name__ == '__main__':
             plt.annotate(f"{pred_val[max_idx, i]:.2f}", (max_idx, pred_val[max_idx, i]),
                          textcoords="offset points", xytext=(0, -15), ha='center', color='orange')
 
-            plt.title(f"🧪 compare - {col} | Max Err: {max_error:.3f}, Min Err: {min_error:.3f}")
+            plt.title(f"compare - {col} | Max Err: {max_error:.3f}, Min Err: {min_error:.3f}")
             plt.xlabel("time")
             plt.ylabel("value")
             plt.legend()
