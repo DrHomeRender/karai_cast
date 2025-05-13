@@ -6,15 +6,15 @@ import argparse
 from sklearn.model_selection import train_test_split
 from util.tensorlization import tensor_from_csv
 from util.TransformerModel import TransformerModel
-
+import json
 # ----------------------- 메인 실행 -----------------------
 if __name__ == "__main__":
     # ---------- 입력 파라미터 ----------
     parser = argparse.ArgumentParser(description="Transformer 시계열 예측 학습")
     parser.add_argument("-i", "--data_path", type = str, default = "data20000.csv", help = "학습 데이터 CSV 경로")
-    parser.add_argument("-s","--seq_len", type = int, default = 10 , help = "시퀀스 길이") # 데이터가 많아지면 늘리십쇼
+    parser.add_argument("-s","--seq_len", type = int, default = 10 , help = "시퀀스 길이") # 데이터증가 할경우 증가
     parser.add_argument("-o","--model", type = str, default = "model.pth", help ="모델 저장 경로")
-    parser.add_argument("-e","--epoch", type = int, default = 4000, help ="epoch 수")
+    parser.add_argument("-e","--epoch", type = int, default = 5000, help ="epoch 수")
     args = parser.parse_args()
 
     # ---------- 데이터 로드 및 정보 ----------
@@ -23,11 +23,85 @@ if __name__ == "__main__":
     print("[INFO] 데이터 통계:\n", df.describe())
     print("[INFO] 학습 대상 컬럼:", list(df.columns[1:]))
 
-    # ---------- 예측 타겟 설정 ----------
-    # TODO: 좀더 좋은 방법 구상 순차가 아닌 선택으로
-    target_category = int(input("\n[입력] 예측할 항목 수를 입력하세요: "))
-    target_columns = df.columns[1:target_category+1]
-    print(f"[INFO] 예측할 타겟 컬럼: {list(target_columns)}")
+    # ---------- 예측 타겟 설정1 ---------- 인덱스 범위 입력
+    #
+    # target_category = int(input("\n[입력] 예측할 항목 수를 입력하세요: "))
+    # target_columns = df.columns[1:target_category+1]
+    # print(f"[INFO] 예측할 타겟 컬럼: {list(target_columns)}")
+
+    # # ---------- 예측 타겟 설정2 ---------- 특정 이름 입력
+    # print("\n[입력] 예측할 컬럼명을 ','로 구분해서 입력하세요 (예: temp_air,temp_water,humidity):")
+    # target_input = input(">> ").strip()
+    # target_columns = [col.strip() for col in target_input.split(",")]
+    #
+    # # 검증
+    # missing_cols = [col for col in target_columns if col not in df.columns]
+    # if missing_cols:
+    #     raise ValueError(f"[ERROR] 존재하지 않는 컬럼명 입력: {missing_cols}")
+    #
+    # print(f"[INFO] 예측할 타겟 컬럼: {target_columns}")
+
+    # ---------- 예측 타겟 설정3 ---------- 카테고리
+    # ---------- 선택 방식 ----------
+    print("\n[옵션] 예측 컬럼 선택 방식을 골라주세요:")
+    print("1. 직접 컬럼명 입력")
+    print("2. 카테고리 선택 후 컬럼명 선택")
+    mode_select = input("\n[입력] 선택하세요 (1/2): ").strip()
+
+    if mode_select == "1":
+        #  직접 입력 모드
+        print("[입력] 예측할 컬럼명을 ','로 구분하여 입력하세요 (예: temp_air,temp_water):")
+        target_input = input(">> ").strip()
+        target_columns = [col.strip() for col in target_input.split(",")]
+
+        missing_cols = [col for col in target_columns if col not in df.columns]
+        if missing_cols:
+            raise ValueError(f"[ERROR] 존재하지 않는 컬럼명 입력: {missing_cols}")
+
+    else:
+        #  자동 분류 + 카테고리 선택 모드
+        sensor_cols = []
+        device_cols = []
+        expected_cols = []
+        target_cols = []
+
+        for col in df.columns[1:]:
+            if "device" in col:
+                device_cols.append(col)
+            elif "expected" in col:
+                expected_cols.append(col)
+            elif "target" in col:
+                target_cols.append(col)
+            else:
+                sensor_cols.append(col)
+
+        print("\n[INFO] 자동 분류 결과")
+        print("1. 센서(sensor):", sensor_cols)
+        print("2. 제어(device):", device_cols)
+        print("3. 예상(expected):", expected_cols)
+        print("4. 기타(target):", target_cols)
+
+        category_map = {
+            "1": sensor_cols,
+            "2": device_cols,
+            "3": expected_cols,
+            "4": target_cols
+        }
+
+        selected_category = input("\n[입력] 카테고리 번호를 선택하세요 (1/2/3/4): ").strip()
+        if selected_category not in category_map:
+            raise ValueError("[ERROR] 올바른 번호를 선택하세요 (1/2/3/4)")
+
+        print(f"\n[INFO] 선택 가능한 컬럼: {category_map[selected_category]}")
+        print("[입력] 예측할 컬럼명을 ','로 구분하여 입력하세요:")
+        target_input = input(">> ").strip()
+        target_columns = [col.strip() for col in target_input.split(",")]
+
+        missing_cols = [col for col in target_columns if col not in category_map[selected_category]]
+        if missing_cols:
+            raise ValueError(f"[ERROR] 잘못된 컬럼 입력: {missing_cols}")
+
+    print(f"[INFO] 최종 예측할 타겟 컬럼: {target_columns}")
 
     # ---------- 텐서 생성 ----------
     input_tensor, target = tensor_from_csv(args.data_path, seq_len=10, target_cols=target_columns)
@@ -73,3 +147,16 @@ if __name__ == "__main__":
     torch.save(model.state_dict(), args.model)
     print(f"\n모델 저장 완료: {args.model}")
     print(f" 예측 항목 수: {output_dim} | 테스트 시 입력하세요.")
+
+    # ---------- 메타 데이터 저장 ----------
+    # 마지막 저장 전에 추가
+    meta_info = {
+        "target_columns": target_columns,
+        "input_dim": input_dim,
+        "output_dim": output_dim,
+        "seq_len": seq_len
+    }
+    with open("model_meta.json", "w") as f:
+        json.dump(meta_info, f, indent=4)
+
+    print("메타 정보 저장 완료: model_meta.json")
