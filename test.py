@@ -3,6 +3,8 @@ import pandas as pd
 from util.tensorlization import tensor_from_csv
 from train import TransformerModel
 import matplotlib.pyplot as plt
+import json
+
 def device_rule(target_temp_air=24,target_temp_water=10,target_humidity=80):
     pred_temp_air = df_pred["predicted_temp_air"]
     pred_temp_water = df_pred["predicted_temp_water"]
@@ -24,9 +26,18 @@ def device_rule(target_temp_air=24,target_temp_water=10,target_humidity=80):
     print(" 제어기 매핑 결과 저장 완료: predictions_with_control.csv")
 
 
-
-
 if __name__ == '__main__':
+    # 자동 로드
+    with open("model_meta.json", "r") as f:
+        meta_info = json.load(f)
+
+    TARGET_COLS = meta_info["target_columns"]
+    output_dim = meta_info["output_dim"]
+    SEQ_LEN = meta_info["seq_len"]
+
+    print(f"[INFO] 메타 정보 불러오기 완료. 타겟 컬럼: {TARGET_COLS}")
+
+
     # ------------------- 설정 -------------------
     SEQ_LEN = 10
     DATA_PATH = "data20000.csv"
@@ -116,11 +127,11 @@ if __name__ == '__main__':
 
     print("예측 결과 vs 실제값 비교 그래프 저장 완료 (compare_*.png)")
 
-    print("훈련시 on/off 장치 유무")
-    use_device = input("데이터에 장치가 존재하나요? (y/n) > ").strip().lower()
-    if use_device == "n":
-       device_rule()
-
+    if not any("device" in col for col in TARGET_COLS):
+        print("[INFO] 센서 예측 모델입니다. device_rule() 자동 실행합니다.")
+        device_rule()
+    else:
+        print("[INFO] 장치 예측 모델입니다. device_rule() 호출 생략.")
     # ------------------- 추가 평가 (val 데이터 기준) -------------------
     use_val_data = input("x_val.csv / y_val.csv로 평가하시겠습니까? (y/n) > ").strip().lower()
 
