@@ -11,9 +11,10 @@ from util.TransformerModel import TransformerModel
 if __name__ == "__main__":
     # ---------- 입력 파라미터 ----------
     parser = argparse.ArgumentParser(description="Transformer 시계열 예측 학습")
-    parser.add_argument("-p", "--data_path", type = str, default = "data20000.csv", help = "학습 데이터 CSV 경로")
-    parser.add_argument("-s","--seq_len", type = int, default = 10 , help = "시퀀스 길이")
+    parser.add_argument("-i", "--data_path", type = str, default = "data20000.csv", help = "학습 데이터 CSV 경로")
+    parser.add_argument("-s","--seq_len", type = int, default = 10 , help = "시퀀스 길이") # 데이터가 많아지면 늘리십쇼
     parser.add_argument("-o","--model", type = str, default = "model.pth", help ="모델 저장 경로")
+    parser.add_argument("-e","--epoch", type = int, default = 4000, help ="epoch 수")
     args = parser.parse_args()
 
     # ---------- 데이터 로드 및 정보 ----------
@@ -51,7 +52,7 @@ if __name__ == "__main__":
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     # ---------- 학습 ----------
-    n_epochs = int(input("\n[입력] 학습할 에폭 수를 입력하세요: "))
+    n_epochs = args.epoch
     for epoch in range(n_epochs):
         model.train()
         optimizer.zero_grad()
