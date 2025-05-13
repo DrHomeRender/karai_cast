@@ -126,7 +126,7 @@ class data_preprocess():
         if outliers.shape[0] > 0:
             print(outliers[[col]])
 
-def tensor_from_csv(csv_path, seq_len=10, target_cols=["expected_growth"]):
+def tensor_from_csv_for_one(csv_path, seq_len=10, target_cols=["expected_growth"]):
     df = pd.read_csv(csv_path)
     df = df.sort_values(df.columns[0])  # 시간 기준 정렬
 
@@ -144,5 +144,30 @@ def tensor_from_csv(csv_path, seq_len=10, target_cols=["expected_growth"]):
         data.append(window.unsqueeze(0))
 
     input_tensor = torch.cat(data, dim=0)  # (batch, seq_len, input_dim)
+    return input_tensor, targets
+def tensor_from_csv(csv_path, seq_len=10, input_cols=None, target_cols=None):
+    import pandas as pd
+    import torch
+
+    df = pd.read_csv(csv_path)
+    df = df.sort_values(df.columns[0])  # 시간 기준 정렬
+
+    if input_cols is None or target_cols is None:
+        raise ValueError("input_cols 와 target_cols 를 명시하세요.")
+
+    # 입력 features
+    features = df[input_cols].values
+    features = torch.tensor(features, dtype=torch.float32)
+
+    # 타겟 values
+    targets = df[target_cols].iloc[seq_len:].values
+    targets = torch.tensor(targets, dtype=torch.float32)
+
+    data = []
+    for i in range(len(features) - seq_len):
+        window = features[i:i + seq_len]
+        data.append(window.unsqueeze(0))
+
+    input_tensor = torch.cat(data, dim=0)
     return input_tensor, targets
 

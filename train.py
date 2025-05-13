@@ -85,6 +85,25 @@ if __name__ == "__main__":
             raise ValueError(f"[ERROR] 잘못된 컬럼 입력: {missing_cols}")
 
     print(f"[INFO] 최종 예측할 타겟 컬럼: {target_columns}")
+    # ---------- 예측하려는 것이 무엇인지 검색 ----------
+
+    if all(col.startswith("device_") for col in target_columns):
+        task_type = "device"
+    elif all(col.startswith("expected_") or col.startswith("target_") for col in target_columns):
+        task_type = "expected"
+    else:
+        task_type = "sensor"
+
+    # ---------- 예측하려는 것이 무엇인지 그리고 컬럼 설정 슈도 코드 ----------
+    if task_type == "device":
+        input_columns = sensor_cols + device_cols
+        target_columns = device_cols
+    elif task_type == "sensor":
+        input_columns = sensor_cols
+        target_columns = sensor_cols
+    elif task_type == "expected":
+        input_columns = sensor_cols + device_cols + expected_cols
+        target_columns = expected_cols
 
     # ---------- 텐서 생성 ----------
     input_tensor, target = tensor_from_csv(args.data_path, seq_len=10, target_cols=target_columns)
@@ -106,14 +125,8 @@ if __name__ == "__main__":
 
     # ---------- 모델 생성 ----------
     model = TransformerModel(input_dim=input_dim, output_dim=output_dim, seq_len=seq_len)
-    # ---------- 예측하려는 것이 무엇인지 검색 ----------
-    if all(col.startswith("device_") for col in target_columns):
-        task_type = "device"
-    elif all(col.startswith("expected_") or col.startswith("target_") for col in target_columns):
-        task_type = "expected"
-    else:
-        task_type = "sensor"
 
+    # ---------- 예측하려는 것이 무엇인지 검색 후 로스 결정----------
     if task_type == "device":
         criterion = nn.BCEWithLogitsLoss()
     else:
