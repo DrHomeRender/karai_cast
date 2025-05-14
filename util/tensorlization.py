@@ -146,8 +146,6 @@ def tensor_from_csv_for_one(csv_path, seq_len=10, target_cols=["expected_growth"
     input_tensor = torch.cat(data, dim=0)  # (batch, seq_len, input_dim)
     return input_tensor, targets
 def tensor_from_csv(csv_path, seq_len=10, input_cols=None, target_cols=None):
-    import pandas as pd
-    import torch
 
     df = pd.read_csv(csv_path)
     df = df.sort_values(df.columns[0])  # 시간 기준 정렬

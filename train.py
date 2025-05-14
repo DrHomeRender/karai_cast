@@ -15,7 +15,7 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--data_path", type = str, default = "data20000.csv", help = "학습 데이터 CSV 경로")
     parser.add_argument("-s","--seq_len", type = int, default = 10 , help = "시퀀스 길이") # 데이터증가 할경우 증가
     parser.add_argument("-o","--model", type = str, default = "model1.pth", help ="모델 저장 경로")
-    parser.add_argument("-e","--epoch", type = int, default = 10, help ="epoch 수")
+    parser.add_argument("-e","--epoch", type = int, default = 5000, help ="epoch 수")
     args = parser.parse_args()
 
     # ---------- 데이터 로드 및 정보 ----------
@@ -76,13 +76,19 @@ if __name__ == "__main__":
             raise ValueError("[ERROR] 올바른 번호를 선택하세요 (1/2/3/4)")
 
         print(f"\n[INFO] 선택 가능한 컬럼: {category_map[selected_category]}")
-        print("[입력] 예측할 컬럼명을 ','로 구분하여 입력하세요(예: temp_air,temp_water):")
-        target_input = input(">> ").strip()
-        target_columns = [col.strip() for col in target_input.split(",")]
+        print("[입력] 예측할 컬럼명을 ','로 구분하여 입력하세요 (예: temp_air,temp_water)")
+        print("        또는 'all' 입력 시 전체 선택")
 
-        missing_cols = [col for col in target_columns if col not in category_map[selected_category]]
-        if missing_cols:
-            raise ValueError(f"[ERROR] 잘못된 컬럼 입력: {missing_cols}")
+        target_input = input(">> ").strip().lower()
+
+        if target_input == "all":
+            target_columns = category_map[selected_category]
+            print(f"[INFO] 전체 컬럼 선택됨: {target_columns}")
+        else:
+            target_columns = [col.strip() for col in target_input.split(",")]
+            missing_cols = [col for col in target_columns if col not in category_map[selected_category]]
+            if missing_cols:
+                raise ValueError(f"[ERROR] 잘못된 컬럼 입력: {missing_cols}")
 
     print(f"[INFO] 최종 예측할 타겟 컬럼: {target_columns}")
     # ---------- 예측하려는 것이 무엇인지 검색 ----------
@@ -94,19 +100,26 @@ if __name__ == "__main__":
     else:
         task_type = "sensor"
 
-    # ---------- 예측하려는 것이 무엇인지 그리고 컬럼 설정 슈도 코드 ----------
+    # ---------- 입력/타겟 컬럼 자동 결정 ----------
+    sensor_cols = [col for col in df.columns if
+                   col.startswith(("temp", "humidity", "ph", "light", "salinity", "do", "co2"))]
+    device_cols = [col for col in df.columns if col.startswith("device_")]
+    expected_cols = [col for col in df.columns if col.startswith("expected_")]
+
     if task_type == "device":
-        input_columns = sensor_cols + device_cols
-        target_columns = device_cols
+        input_columns = sensor_cols + device_cols  # 과거 장치 이력도 같이 넣음 (Best practice)
+        # 주의: target_columns는 그대로 유지 (사용자 선택한 device_컬럼)
     elif task_type == "sensor":
         input_columns = sensor_cols
-        target_columns = sensor_cols
+        # target_columns도 sensor만 → 그대로
     elif task_type == "expected":
-        input_columns = sensor_cols + device_cols + expected_cols
-        target_columns = expected_cols
+        input_columns = sensor_cols + device_cols
+        # target_columns는 그대로 expected_ 계열
 
+    print(f"최종 입력 컬럼: {input_columns}")
+    print(f"최종 타겟 컬럼: {target_columns}")
     # ---------- 텐서 생성 ----------
-    input_tensor, target = tensor_from_csv(args.data_path, seq_len=10, target_cols=target_columns)
+    input_tensor, target = tensor_from_csv(args.data_path, input_cols=input_columns, target_cols=target_columns)
     input_dim = input_tensor.shape[2]
     print("target_columns",target_columns)
     output_dim = len(target_columns)
@@ -150,7 +163,7 @@ if __name__ == "__main__":
             meta_info = json.load(f)
 
         target_columns = meta_info["target_columns"]
-        input_tensor, target = tensor_from_csv(args.data_path, seq_len=meta_info["seq_len"], target_cols=target_columns)
+        input_tensor, target = tensor_from_csv(args.data_path, input_cols=input_columns, target_cols=target_columns)
         input_dim = meta_info["input_dim"]
         output_dim = meta_info["output_dim"]
         seq_len = meta_info["seq_len"]
@@ -196,9 +209,11 @@ if __name__ == "__main__":
     # 마지막 저장 전에 추가
     meta_info = {
         "target_columns": target_columns,
+        "input_columns": input_columns,
         "input_dim": input_dim,
         "output_dim": output_dim,
-        "seq_len": seq_len
+        "seq_len": seq_len,
+        "task_type": task_type  # 추가
     }
     # 설정값 넘겨주므로 하드 코딩
     with open("model_meta.json", "w") as f:
